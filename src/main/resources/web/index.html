@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>DSC Panel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"> 
+  <link rel="stylesheet" href="css/jquery.mobile-1.4.5.min.css"/>
+  <link rel="stylesheet" href="css/panel.css"/>
+  <link rel="stylesheet" href="css/led.css"/>
+
+</head>
+
+<body>
+<div id="dsc-page" data-role="page">
+    <div data-role="header" data-theme="b">
+        <h1>DSC Panel</h1>
+        <p><small><i>Swipe right for events</i></small></p>
+        <a href="#left-panel" data-icon="carat-r" data-iconpos="notext" data-shadow="false" data-iconshadow="false" class="ui-nodisc-icon">Show events</a>
+        <a href="#" id="btnRefresh" data-icon="refresh" data-iconpos="notext" data-shadow="false" data-iconshadow="false" class="ui-nodisc-icon">Refresh</a>
+        <span id="spanPanelMsg"/>
+    </div>
+    
+    <div role="main" class="ui-content">
+
+        <form id="dummyForm">
+        <fieldset class="ui-grid-b">
+           <div id="leds" class="container">
+              <div class="led-box">
+                <div id="ledREADY" class="led-green"></div>
+                <p>Ready</p>
+              </div>
+              <div class="led-box">
+                <div id="ledARMED" class="led-off"></div>
+                <p>Armed</p>
+              </div>
+              <div class="led-box">
+                <div id="ledTROUBLE" class="led-off"></div>
+                <p>Trouble</p>
+              </div>
+              <div class="led-box">
+                <div id="ledPROGRAM" class="led-off"></div>
+                <p>Program</p>
+              </div>
+              <div class="led-box">
+                <div id="ledFIRE" class="led-off"></div>
+                <p>Fire</p>
+              </div>
+         </div>
+        </fieldset>
+        <fieldset class="ui-grid-b">
+            <div class="ui-block-a">
+              <button id="btnStayarm" class="ui-btn ui-btn-inline ui-icon-lock ui-btn-icon-left">Stay Arm</button>
+            </div>
+            <div class="ui-block-b">
+              <button id="btnAwayarm" class="ui-btn ui-btn-inline ui-icon-lock ui-btn-icon-left">Away Arm</button>
+            </div>
+        </fieldset>
+        <fieldset class="ui-grid-b">
+            <div class="ui-block-a">
+                <input type="password" id="txtUsercode" name="txtUsercode" pattern="[0-9]*" placeholder="Please provide user code"/>
+            </div>
+            <div class="ui-block-b">
+                <button id="btnDisarm" class="ui-btn ui-btn-inline ui-icon-action ui-btn-icon-left">Disarm</button>
+            </div>
+        </fieldset>
+        <span id="spanMsgUserCode"></span>
+        <fieldset class="ui-grid-b">
+            <div class="ui-block-a">
+              <button id="btnFire" class="ui-btn ui-btn-inline ui-icon-alert ui-btn-icon-left">Fire</button>
+            </div>
+            <div class="ui-block-b">
+              <button id="btnAmb" class="ui-btn ui-btn-inline ui-icon-alert ui-btn-icon-left">Ambulance</button>
+            </div>
+            <div class="ui-block-c">
+              <button id="btnPol" class="ui-btn ui-btn-inline ui-icon-alert ui-btn-icon-left">Police</button>
+            </div>
+        </fieldset>
+        <fieldset class="ui-grid-solo">
+            <div class="ui-block-a">
+	           	<table class="ui-shadow">
+	           		<tr id="alarmsRow" class="info-td-all"/>
+	           	</table>
+           </div>
+        </fieldset>
+        <fieldset class="ui-grid-solo">
+            <div class="ui-block-a">
+	           	<table class="ui-shadow">
+	           		<tr id="troublesRow" class="info-td-all"/>
+	           	</table>
+           </div>
+        </fieldset>
+        <fieldset class="ui-grid-solo">
+            <div class="ui-block-a">
+	           	<table class="ui-shadow">
+	           		<tr id="openZonesRow"  class="info-td-all"/>
+	           	</table>
+           </div>
+        </fieldset>
+        </form>
+    </div>
+
+    <div data-role="panel" id="left-panel" data-theme="b">
+        <h2>Events</h2>
+        <a href="#" data-rel="close" class="ui-btn ui-corner-all ui-shadow ui-mini ui-btn-inline ui-icon-back ui-btn-icon-left ui-btn-right">Close</a>
+        <a href="#" id="btnClearEvents" class="ui-btn ui-corner-all ui-shadow ui-mini ui-btn-inline ui-icon-delete ui-btn-icon-left">Clear</a>
+        <ol id="lsEvents" data-role="listview" data-inset="true"/>
+    </div><!-- /panel -->
+    
+</div>
+  
+  <script src="js/jquery-1.11.1.min.js"></script>
+  <script src="js/jquery.mobile-1.4.5.min.js"></script>
+  <script src="js/main.js"></script>
+
+</body>
+</html>
