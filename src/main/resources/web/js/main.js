@@ -51,6 +51,21 @@ $('#btnRefresh').click(function() {
 	return false;
 });
 
+$('#btnFire').click(function() {
+	confirmPanicDialog('FIRE');
+	return false;
+});
+
+$('#btnAmb').click(function() {
+	confirmPanicDialog('AMBULANCE');
+	return false;
+	});
+
+$('#btnPol').click(function() {
+	confirmPanicDialog('POLICE');
+	return false;
+	});
+
 $('#btnStayarm').hide();
 $('#btnAwayarm').hide();
 $('#btnDisarm').hide();
@@ -344,3 +359,61 @@ function updateEvent(msg)
 			console.log("Ignoring message of type " + mo.type);
 	}
 }
+
+//http://jsfiddle.net/EELLj/2/
+function confirmDialog(text, callback) {
+    var popupDialogId = 'confirmationPopupDialog';
+    $('<div data-role="popup" id="' + popupDialogId + '" data-confirmed="no" data-transition="pop" data-overlay-theme="b" data-theme="b" data-dismissible="false" style="max-width:400px;"> \
+                        <div data-role="header" data-theme="a">\
+                            <h1>Confirmation</h1>\
+                        </div>\
+                        <div role="main" class="ui-content">\
+                            <h3 class="ui-title">' + text + '</h3>\
+                            <a href="#" class="ui-btn ui-corner-all ui-shadow ui-btn-inline ui-btn-b optionConfirm" data-rel="back">Yes</a>\
+                            <a href="#" class="ui-btn ui-corner-all ui-shadow ui-btn-inline ui-btn-b optionCancel" data-rel="back" data-transition="flow">No</a>\
+                        </div>\
+                    </div>')
+        .appendTo($.mobile.pageContainer);
+    var popupDialogObj = $('#' + popupDialogId);
+    popupDialogObj.trigger('create');
+    popupDialogObj.popup({
+        afterclose: function (event, ui) {
+            popupDialogObj.find(".optionConfirm").first().off('click');
+            var isConfirmed = popupDialogObj.attr('data-confirmed') === 'yes' ? true : false;
+            $(event.target).remove();
+            if (isConfirmed && callback) {
+                callback();
+            }
+        }
+    });
+    popupDialogObj.popup('open');
+    popupDialogObj.find(".optionConfirm").first().on('click', function () {
+        popupDialogObj.attr('data-confirmed', 'yes');
+    });
+}
+
+function confirmPanicDialog(panic)
+{
+	confirmDialog("Trigger " + panic + " alarm?", 
+			function()
+			{
+				sendPanic(panic);
+			});	
+}
+
+function sendPanic(panic) {
+	console.log('triggering panic: ' + panic);
+	$.ajax({
+		type: 'POST',
+		url: '/api/dsc/panic',
+		data: panic,
+		success: loadPanel,
+		error: onPanicFailure
+	});
+}
+
+function onPanicFailure(jqXHR, textStatus, errorThrown)
+{
+    alert('failed to panic: ' + textStatus);
+}
+

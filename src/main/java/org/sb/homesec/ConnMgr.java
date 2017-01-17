@@ -46,7 +46,7 @@ public class ConnMgr<T> implements Supplier<T>
             if(tmp == null || !checker.test(tmp))
             try
             {
-            	if(tmp == null)
+            	if(tmp != null)
             	try 
     			{
             		log.error("Connection check failed, will attempt to reconnect");

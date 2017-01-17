@@ -9,4 +9,16 @@
  "password" : "abcd1234"
 }
 
-}
+//,
+//"notifications" : {
+//
+//}
+
+//,
+//"foscams" : {
+//	"f1" : {
+//		"uri" : "http://10.100.10.1:88/cgi-bin/CGIProxy.fcgi",
+//		"username" : "haha",
+//		"password" : "hehe"
+//   }
+//}

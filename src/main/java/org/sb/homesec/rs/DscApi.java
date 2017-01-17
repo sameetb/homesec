@@ -1,14 +1,8 @@
 package org.sb.homesec.rs;
 
-import java.text.SimpleDateFormat;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.Optional;
-import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import java.util.function.Supplier;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
@@ -16,12 +10,12 @@ import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.Status;
 
 import org.sb.homesec.ws.EventHandler;
+import org.sb.libevl.Commands;
 import org.sb.libevl.DscPanel;
 import org.sb.libevl.EvlConnection;
-import org.sb.libevl.Commands;
-import java.util.function.Supplier;
 import org.sb.libevl.JsonHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -142,6 +136,29 @@ public class DscApi
     	}	
 	}
 
+	@Path("/panic")
+	@POST
+	@Produces(MediaType.APPLICATION_JSON)
+	public Response panic(String type) throws Exception
+	{
+	    try
+	    {
+    	    log("panic alarm");
+		    conn.get().send(cmds.triggerPanicAlarm(Commands.PanicType.valueOf(type.toUpperCase())));
+		    return Response.ok().build();
+        }
+	    catch(IllegalArgumentException ill)
+	    {
+    	    log.error("unsupported panic type " + type, ill);
+    		return Response.status(Status.BAD_REQUEST).entity(ill.getMessage()).build();
+	    }
+    	catch(Exception ex)
+    	{
+    	    log("panic failed", ex);
+    		return Response.serverError().entity(ex.getMessage()).build();
+    	}	
+	}
+	
     private void log(String msg)
     {
     	log.info(msg);
