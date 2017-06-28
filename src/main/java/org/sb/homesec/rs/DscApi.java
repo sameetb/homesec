@@ -1,7 +1,5 @@
 package org.sb.homesec.rs;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.function.Supplier;
 
 import javax.ws.rs.GET;
@@ -12,7 +10,6 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
-import org.sb.homesec.ws.EventHandler;
 import org.sb.libevl.Commands;
 import org.sb.libevl.DscPanel;
 import org.sb.libevl.EvlConnection;
@@ -27,15 +24,12 @@ public class DscApi
     
     private final DscPanel panel;
     private final Supplier<EvlConnection> conn;
-	private final EventHandler eh;
-	private final ExecutorService asyncNotifier = Executors.newSingleThreadExecutor();
     private final Commands cmds = new Commands();
 	
-	public DscApi(DscPanel panel, Supplier<EvlConnection> conn, EventHandler eh) 
+	public DscApi(DscPanel panel, Supplier<EvlConnection> conn) 
 	{
 	    this.panel = panel;
 	    this.conn = conn;
-		this.eh = eh;
 	}
 
 	@Path("/leds")

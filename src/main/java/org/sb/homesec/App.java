@@ -20,6 +20,12 @@ import javax.websocket.server.ServerEndpoint;
 import javax.websocket.server.ServerEndpointConfig;
 
 import org.apache.cxf.jaxrs.servlet.CXFNonSpringJaxrsServlet;
+import org.eclipse.jetty.security.Authenticator;
+import org.eclipse.jetty.security.ConstraintMapping;
+import org.eclipse.jetty.security.ConstraintSecurityHandler;
+import org.eclipse.jetty.security.LoginService;
+import org.eclipse.jetty.security.SecurityHandler;
+import org.eclipse.jetty.security.authentication.BasicAuthenticator;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.handler.ContextHandler;
@@ -29,6 +35,7 @@ import org.eclipse.jetty.server.handler.ResourceHandler;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.util.resource.Resource;
+import org.eclipse.jetty.util.security.Constraint;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.eclipse.jetty.websocket.jsr356.server.deploy.WebSocketServerContainerInitializer;
 import org.sb.homesec.rs.HomesecApp;
@@ -94,7 +101,15 @@ public class App
         staticContext.setContextPath( "/homesec" );
         staticContext.setHandler(staticContent);
         
-        final HomesecApp rsApp = new HomesecApp(panel, conn, epCfg);
+		cams = cfg.filter(c -> !c.isNull("foscams"))
+				.map(c -> c.getJsonObject("foscams"))
+				.map(cams -> cams.entrySet().stream()
+								  .filter(es -> es.getValue().getValueType() ==  JsonValue.ValueType.OBJECT)
+								  .map(es -> new Foscam(es.getKey(), (JsonObject)es.getValue()))
+								  .collect(Collectors.collectingAndThen(Collectors.toSet(), Collections::unmodifiableSet)))
+				.orElseGet(() -> Collections.emptySet());
+		
+        final HomesecApp rsApp = new HomesecApp(panel, conn, epCfg, cams);
         
 		ServletHolder rsServlet = new ServletHolder(new CXFNonSpringJaxrsServlet(rsApp));
         rsServlet.setName("api");
@@ -106,10 +121,13 @@ public class App
         ServletContextHandler wsContext = new ServletContextHandler(ServletContextHandler.SESSIONS);
         wsContext.setContextPath("/ws");
         
-
         HandlerList handlers = new HandlerList();
         handlers.setHandlers(new Handler[] { rsContext, wsContext, staticContext, new DefaultHandler() });
-        server.setHandler(handlers);
+        
+        server.setHandler(cfg.flatMap(c -> Optional.ofNullable(c.getJsonObject("security")))
+					           .map(sec -> makeSecurityHandler(sec))
+					           .map(sh -> {sh.setHandler(handlers);return (Handler)sh;})
+					           .orElse(handlers));
 
         ServerContainer wsCont = WebSocketServerContainerInitializer.configureContext(wsContext);
 		wsCont.addEndpoint( ServerEndpointConfig.Builder.create(EventSocket.class, 
@@ -121,15 +139,9 @@ public class App
 
 		sh = cfg.flatMap(c -> Optional.ofNullable(c.getJsonObject("notifications"))).map(cn -> new ScriptNotificationHandler(cn));
 		
-		cams = cfg.filter(c -> !c.isNull("foscams"))
-					.map(c -> c.getJsonObject("foscams"))
-					.map(cams -> cams.entrySet().stream()
-									  .filter(es -> es.getValue().getValueType() ==  JsonValue.ValueType.OBJECT)
-									  .map(es -> new Foscam(es.getKey(), (JsonObject)es.getValue()))
-									  .collect(Collectors.toSet())).orElseGet(() -> Collections.emptySet());
     }
 
-    public void start() throws Exception
+	public void start() throws Exception
     {
         server.start();
         conn.get().send(new Commands().statusReport());
@@ -258,6 +270,8 @@ public class App
 									}
 	        					});
 	        					break;
+	        				default:
+	        	        		log.trace("Nothing to do about " + as);
 	        			}
 	        			
 	        		}
@@ -291,4 +305,54 @@ public class App
          return optJsonString(dsc, "password").orElseGet(() ->
                                 String.valueOf(System.console().readPassword("Envisalink Password:")));
     }
+
+    private SecurityHandler makeSecurityHandler(JsonObject sec) 
+    {
+    	Authenticator au = makeAuthenticator(sec);
+    	
+    	ConstraintSecurityHandler security = new ConstraintSecurityHandler();
+    	
+    	Constraint constraint = new Constraint();
+        constraint.setName("auth");
+        constraint.setAuthenticate(true);
+        constraint.setRoles(new String[] { "*", "**" });
+
+        ConstraintMapping mapping = new ConstraintMapping();
+        mapping.setPathSpec("/*");
+        mapping.setConstraint(constraint);
+
+        security.setConstraintMappings(Collections.singletonList(mapping));
+        security.setAuthenticator(au);
+
+        Optional.ofNullable(sec.getJsonObject("loginService"))
+        		.map(ls -> makeLoginService(ls))
+        		.ifPresent(ls -> security.setLoginService(ls));
+    	
+		return security;
+	}
+
+	private Authenticator makeAuthenticator(JsonObject sec)
+	{
+		try 
+		{
+			return Authenticator.class.cast(Class.forName(sec.getString("authenticator", BasicAuthenticator.class.getName())).newInstance());
+		} 
+		catch (Exception e) 
+		{
+			throw new RuntimeException("Failed to create authenticator from "  + sec);
+		}
+	}
+
+	private LoginService makeLoginService(JsonObject ls)
+	{
+		try 
+		{
+			Class<LoginService> cls = (Class<LoginService>) Class.forName(ls.getString("class"));
+			return cls.getConstructor(String.class, String.class).newInstance(ls.getString("name"), ls.getString("config"));
+		} 
+		catch (Exception e) 
+		{
+			throw new RuntimeException("Failed to create login service from "  + ls, e);
+		}
+	}
 }

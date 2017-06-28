@@ -342,6 +342,7 @@ function updateEvent(msg)
 	{
 		case "ARM":
 		case "LED":
+		case "MISC":
 			loadLeds();
 			setMsg(mo.msg);
 			break;
