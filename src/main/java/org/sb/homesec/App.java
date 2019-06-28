@@ -6,7 +6,12 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -56,11 +61,13 @@ public class App
     private final DscPanel panel = new DscPanel(this::sendNotification);
     private final Optional<JsonObject> cfg;
     private final EndpointConfigurator epCfg = new EndpointConfigurator();
-    private final Supplier<EvlConnection> conn = ConnMgr.wrap(() ->  evlConnect(), 
+    private final Supplier<EvlConnection> conn = ConnMgr.wrap(() ->  loadStatus(evlConnect()), 
 										    							evl -> evl.isAlive(), evl -> evl.close());
     private final Optional<ScriptNotificationHandler> sh;
     
     private final Set<Foscam> cams;
+    
+    private final ScheduledExecutorService exec;
     
     public static void main( String[] args ) throws Exception
     {
@@ -109,6 +116,8 @@ public class App
 								  .collect(Collectors.collectingAndThen(Collectors.toSet(), Collections::unmodifiableSet)))
 				.orElseGet(() -> Collections.emptySet());
 		
+		exec = Executors.newScheduledThreadPool(optJsonInt(cfg, "minBackgroundThreads").orElse(3));
+		
         final HomesecApp rsApp = new HomesecApp(panel, conn, epCfg, cams);
         
 		ServletHolder rsServlet = new ServletHolder(new CXFNonSpringJaxrsServlet(rsApp));
@@ -144,11 +153,14 @@ public class App
 	public void start() throws Exception
     {
         server.start();
-        conn.get().send(new Commands().statusReport());
+        if(connOnInit()) 
+	        conn.get();
+        
         Runtime.getRuntime().addShutdownHook(new Thread(() ->  
             {
                 try
                 {
+                    exec.shutdown();
                     panel.close();
                     conn.get().close();
                 }
@@ -160,6 +172,7 @@ public class App
                 try
                 {
                     server.stop();
+                    exec.awaitTermination(30, TimeUnit.SECONDS);
                 }
                 catch(Exception ex)
                 {
@@ -167,9 +180,19 @@ public class App
                 }
                 System.console().flush();
             }));
+		
+        setupKeepAlive();
+        
         server.join();
-    }    
-    
+    }
+
+	private boolean connOnInit() 
+	{
+		return !cfg.flatMap(c -> Optional.ofNullable(c.getJsonObject("envisalink")))
+		           .flatMap(c -> Optional.ofNullable(c.get("connectOnInit")))
+		           .map(jbool -> jbool == JsonValue.FALSE).orElse(false);
+	}
+
     private static Optional<String> optJsonString(Optional<JsonObject> obj, String name)
     {
         return obj.flatMap(c -> Optional.ofNullable(c.getJsonString(name))).map(jn -> jn.getString());
@@ -221,7 +244,7 @@ public class App
             return new EvlConnection(InetAddress.getByName(optJsonString(dsc, "hostname").orElse("envisalink")), 
                                         optJsonInt(dsc, "port"), 
                                         () -> getPassword(dsc), 
-                                        panel.stateHandler);            
+                                        panel.stateHandler);
         }
         catch(RuntimeException re)
         {
@@ -232,6 +255,21 @@ public class App
             throw new RuntimeException("Failed to create a connection to envisalink", io);
         }       
     }
+
+	private EvlConnection loadStatus(EvlConnection evl) 
+	{
+		exec.submit(() -> {
+			try 
+			{
+				evl.send(new Commands().statusReport());
+			} 
+			catch (Exception e) 
+			{
+				log.error("Failed to send statusReport command", e);
+			}
+		});
+		return evl;
+	}
     
     protected void sendNotification(Notification note)
     {
@@ -248,6 +286,18 @@ public class App
         	String[] msgs = note.msg.split("\\.");
         	
         	DscPanel.PartitionState ps = DscPanel.PartitionState.valueOf(msgs[0]);
+			Consumer<Foscam> armCam = cam -> {
+				try 
+				{
+					log.info("Away arming " + cam.getName());
+					cam.awayarm();
+				} 
+				catch (Exception e) 
+				{
+					log.error("Failed to away arm " + cam.getName(), e);
+				};
+			};
+			
         	switch(ps)
         	{
         		case ARMED:
@@ -257,18 +307,11 @@ public class App
 	        			{
 	        				case AWAYARMED: 
 	        				case ZERO_ENTRY_AWAY:
-	        					cams.forEach(cam -> 
-	        					{
-	        						try 
-	        						{
-	        							log.info("Away arming " + cam.getName());
-										cam.awayarm();
-									} 
-	        						catch (Exception e) 
-	        						{
-	        							log.error("Failed to away arm " + cam.getName(), e);
-									}
-	        					});
+	        					asyncExec(cams, armCam);
+	        					break;
+	        				case STAYARMED:
+	        				case ZERO_ENTRY_STAY:
+	        					asyncExec(cams.stream().filter(Foscam::isOutdoor).collect(Collectors.toSet()), armCam);
 	        					break;
 	        				default:
 	        	        		log.trace("Nothing to do about " + as);
@@ -277,18 +320,17 @@ public class App
 	        		}
         			break;
         		case DISARMED: 
-					cams.forEach(cam -> 
-					{
-						try 
-						{
-							log.info("Disarming " + cam.getName());
-							cam.disarm();;
-						} 
-						catch (Exception e) 
-						{
-							log.error("Failed to disarm " + cam.getName(), e);
-						}
-					});
+        			asyncExec(cams, cam ->	{
+												try 
+												{
+													log.info("Disarming " + cam.getName());
+													cam.disarm();
+												} 
+												catch (Exception e) 
+												{
+													log.error("Failed to disarm " + cam.getName(), e);
+												}
+											});
 					break;
 	        	default:
 	        		log.trace("Nothing to do about " + ps);
@@ -355,4 +397,42 @@ public class App
 			throw new RuntimeException("Failed to create login service from "  + ls, e);
 		}
 	}
+	
+	private <T> void asyncExec(Set<T> cams, Consumer<T> cons)
+	{
+		cams.forEach(cam -> exec.submit(() -> cons.accept(cam)));
+	}
+
+	private void setupKeepAlive() 
+	{
+		Integer ka = optJsonInt(cfg, "keepAliveIntervalMins").orElse(15);
+        
+        Random rand = new Random();
+		exec.scheduleWithFixedDelay(() ->	{
+												try 
+												{
+													conn.get().send(new Commands().poll());
+													return;
+												} 
+												catch (Exception e) 
+												{
+													log.warn("Failed to poll panel", e);
+												}
+											},
+									ka + rand.nextInt(ka), ka, TimeUnit.MINUTES);
+		
+		cams.forEach(cam -> 
+			exec.scheduleWithFixedDelay(() ->	{
+													try 
+													{
+														cam.cmd(new Foscam.Commands().name());
+													} 
+													catch (Exception e) 
+													{
+														log.error("Failed to send keep alive to " + cam.getName(), e);
+													}
+												},
+										ka + rand.nextInt(ka), ka, TimeUnit.MINUTES));
+	}    
 }
+

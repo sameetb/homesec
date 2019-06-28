@@ -78,9 +78,7 @@ public class ScriptNotificationHandler
 			{
 				log.debug("Executing " + script + " for " + event.type);
 				Runtime.getRuntime().exec(
-						new String[]{script, event.type.toString(), event.type.toString(), 
-								event.date(),
-								"\"" + event.msg + "\""});
+						new String[]{script, event.type.toString(), event.date(), "\"" + event.msg + "\""});
 			} 
 			catch (Exception e) 
 			{

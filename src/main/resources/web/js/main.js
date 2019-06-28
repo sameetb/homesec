@@ -47,7 +47,7 @@ $('#btnClearEvents').click(function() {
 });
 
 $('#btnRefresh').click(function() {
-	loadPanel();
+	refresh();
 	return false;
 });
 
@@ -74,6 +74,39 @@ $('#txtUsercode').hide();
 loadPanel();
 
 var eventsWs = wsConnect("events");
+
+loadCams();
+
+$('#lsCams').on("click", "a", function() {
+	
+	var id = $(this).attr('id');
+	
+	cameraPopup(id);
+	
+	return false;
+	});
+
+$('#btnCamArmAll').click(function() {
+	$.ajax({
+		type: 'POST',
+		url: '/api/foscam/arm',
+		dataType: "json",
+		success: onArmSuccess,
+		error: onArmFailure
+	});
+	return false;
+	});
+
+$('#btnCamDisarmAll').click(function() {
+	$.ajax({
+		type: 'POST',
+		url: '/api/foscam/disarm',
+		dataType: "json",
+		success: onDisArmSuccess,
+		error: onDisArmFailure
+	});
+	return false;
+	});
 
 function loadLeds()
 {
@@ -128,8 +161,8 @@ function renderLeds(dscLeds)
 		{
 			console.log('Unknown led ' + key + '=' + dscLeds[key]);
 		}
-		toggleButtons(key,  dscLeds[key]);
 	}
+	toggleButtons(dscLeds);
 }
 
 function renderAlarms(dscAlarms) 
@@ -259,41 +292,43 @@ function getLedClass(key, ledState)
 	return "led-yellow";
 }
 
-function toggleButtons(ledName, ledState)
+function toggleButtons(dscLeds)
 {
-	if(ledName === "READY")
+	var armed = false;
+	var ready = false;
+	
+	for(var ledName in dscLeds)
 	{
-		switch(ledState)
+		if(ledName === "ARMED" && dscLeds[ledName] === "ON")
 		{
-			case "ON":
-				$('#btnStayarm').show();
-			    $('#btnAwayarm').show();
-			    $('#btnDisarm').hide();
-			    $('#txtUsercode').hide();
-			    break;
-			default:
-				$('#btnStayarm').hide();
-			    $('#btnAwayarm').hide();
-			    $('#btnDisarm').show();
-			    $('#txtUsercode').show();
+			armed = true;
+		}
+		if(ledName === "READY" && dscLeds[ledName] === "ON")
+		{
+			ready = true;
 		}
 	}
-	if(ledName === "ARM")
+	
+	if(armed)
 	{
-		switch(ledState)
-		{
-			case "ON":
-				$('#btnStayarm').hide();
-			    $('#btnAwayarm').hide();
-			    $('#btnDisarm').show();
-			    $('#txtUsercode').show();
-			    break;
-			default:
-				$('#btnStayarm').show();
-			    $('#btnAwayarm').show();
-			    $('#btnDisarm').hide();
-			    $('#txtUsercode').hide();
-		}
+		$('#btnStayarm').hide();
+	    $('#btnAwayarm').hide();
+	    $('#btnDisarm').show();
+	    $('#txtUsercode').show();
+	}
+	else if(ready)
+	{
+		$('#btnStayarm').show();
+	    $('#btnAwayarm').show();
+	    $('#btnDisarm').hide();
+	    $('#txtUsercode').hide();
+	}
+	else
+	{
+		$('#btnStayarm').hide();
+	    $('#btnAwayarm').hide();
+	    $('#btnDisarm').hide();
+	    $('#txtUsercode').hide();
 	}
 }
 
@@ -418,3 +453,156 @@ function onPanicFailure(jqXHR, textStatus, errorThrown)
     alert('failed to panic: ' + textStatus);
 }
 
+function refresh()
+{
+	$.ajax({
+		type: 'POST',
+		url: '/api/dsc/refresh',
+		dataType: 'text',
+		success: loadPanel,
+		error: onLoadFailure
+	});
+}
+
+function loadCams()
+{
+	$.ajax({
+		type: 'GET',
+		url: '/api/foscam/names',
+		dataType: "json",
+		success: listCams,
+		error: onLoadFailure
+	});
+}
+
+function listCams(cams) 
+{
+	$('#lsCams').empty();
+	cams.forEach(function(cam)
+			{
+				$('#lsCams').append('<li data-icon="eye"><a href="#" id="' + cam + '"><h2>' + cam + '</h2></a></li>');
+			});
+}
+
+
+function cameraPopup(cam) {
+    var popupDialogId = 'cameraPopup';
+    $('<div data-role="popup" id="' + popupDialogId + '" data-theme="c">\
+    	<div class="ui-block-a">\
+	        <ul id="popupActionList" data-role="listview" data-inset="true" style="min-width:210px;">\
+	            <li data-role="list-divider">Choose an action</li>\
+	            <li id="camStatus" data-icon="info"><a href="#"  data-rel="back">Status</a></li>\
+	            <li id="camArm" data-icon="lock"><a href="#"  data-rel="back">Arm</a></li>\
+	            <li id="camDisarm" data-icon="action"><a href="#"	 data-rel="back">Disarm</a></li>\
+	            <li id="camSnap" data-icon="camera"><a href="#"  data-rel="back">Snap</a></li>\
+    			<li id="camRecord" data-icon="cloud"><a href="#"  data-rel="back">Record</a></li>\
+    			<li id="camStream" data-icon="video"><a href="#"  data-rel="back">Stream</a></li>\
+	        </ul>\
+    	</div>\
+       </div>')
+        .appendTo($.mobile.activePage);
+    var popupDialogObj = $('#' + popupDialogId);
+    var popupActionListObj= $('#' + 'popupActionList');
+    
+    popupDialogObj.trigger('create');
+    popupDialogObj.popup({
+        afterclose: function (event, ui) {
+            $(event.target).remove();
+        }
+    });
+    $('#popupActionList').on('click', 'li', function() {
+        window[$(this).attr('id')](cam); 
+    });
+    popupDialogObj.popup('open');
+}
+
+function camStatus(cam)
+{
+	$.ajax({
+		type: 'GET',
+		url: '/api/foscam/' + cam + '/status',
+		dataType: "json",
+		success: showCamStatus,
+		error: onLoadFailure
+	});
+	return false;
+}
+
+function camArm(cam)
+{
+	$.ajax({
+		type: 'POST',
+		url: '/api/foscam/' + cam + '/arm',
+		success: onArmSuccess,
+		error: onArmFailure
+	});
+	return false;
+}
+
+function camDisarm(cam)
+{
+	$.ajax({
+		type: 'POST',
+		url: '/api/foscam/' + cam + '/disarm',
+		success: onDisArmSuccess,
+		error: onDisArmFailure
+	});
+	return false;
+}
+
+function camSnap(cam)
+{
+	var popupDialogId = 'popupCamSnap';
+	
+    $('<div data-role="popup" id="' +  popupDialogId + '" data-overlay-theme="b" data-theme="b" data-corners="false">\
+    	<a href="#" data-rel="back" class="ui-btn ui-corner-all ui-shadow ui-btn-a ui-icon-delete ui-btn-icon-notext ui-btn-right">Close</a>\
+    	<img src="/api/foscam/' + cam + '/snapPicture" style="max-height:512px;" alt="Image from camera ' + cam + '"/>\
+       </div>')
+       .appendTo($.mobile.activePage);
+   var popupDialogObj = $('#' + popupDialogId);
+   popupDialogObj.trigger('create');
+   popupDialogObj.popup({
+       afterclose: function (event, ui) {
+           $(event.target).remove();
+       }
+   });
+   setTimeout(function() { popupDialogObj.popup('open'); }, 500);
+   return false;
+}
+
+function showCamStatus(data)
+{
+	alert(JSON.stringify(data));
+}
+
+function camRecord(cam)
+{
+	$.ajax({
+		type: 'POST',
+		url: '/api/foscam/' + cam + '/record',
+		success: function(data){
+			alert("Started recording " + cam);
+		},
+		error: onLoadFailure
+	});
+	return false;
+}
+
+function camStream(cam)
+{
+     var win = window.open('/api/foscam/' + cam + '/stream', '_blank');
+     win.focus();
+    return false;
+}
+
+$('#btnCamRecordAll').click(function() {
+	$.ajax({
+		type: 'POST',
+		url: '/api/foscam/record',
+		success: function(data){
+			alert("Started recording all cameras");
+		},
+		error: onLoadFailure
+	});
+	return false;
+	});

@@ -14,8 +14,9 @@
 <div id="dsc-page" data-role="page">
     <div data-role="header" data-theme="b">
         <h1>DSC Panel</h1>
-        <p><small><i>Swipe right for events</i></small></p>
+        <!-- p><small><i>Swipe right for events</i></small></p -->
         <a href="#left-panel" data-icon="carat-r" data-iconpos="notext" data-shadow="false" data-iconshadow="false" class="ui-nodisc-icon">Show events</a>
+        <a href="#right-panel" data-icon="carat-l" data-iconpos="notext" data-shadow="false" data-iconshadow="false" class="ui-nodisc-icon">Cameras</a>
         <a href="#" id="btnRefresh" data-icon="refresh" data-iconpos="notext" data-shadow="false" data-iconshadow="false" class="ui-nodisc-icon">Refresh</a>
         <span id="spanPanelMsg"/>
     </div>
@@ -105,6 +106,37 @@
         <a href="#" id="btnClearEvents" class="ui-btn ui-corner-all ui-shadow ui-mini ui-btn-inline ui-icon-delete ui-btn-icon-left">Clear</a>
         <ol id="lsEvents" data-role="listview" data-inset="true"/>
     </div><!-- /panel -->
+
+    <div data-role="panel" id="right-panel" data-position="right" data-theme="c">
+        <h2>Cameras</h2>
+        <a href="#" data-rel="close" class="ui-btn ui-corner-all ui-shadow ui-mini ui-btn-inline ui-icon-back ui-btn-icon-left ui-btn-right">Close</a>
+        <fieldset class="ui-grid-b">
+			<div class="ui-block-a">
+		        <a href="#" id="btnCamArmAll" class="ui-btn ui-corner-all ui-shadow ui-mini ui-btn-inline ui-icon-lock ui-btn-icon-left">Arm All</a>
+            </div>
+	    </fieldset>
+        <fieldset class="ui-grid-b">
+			<div class="ui-block-a">
+		        <a href="#" id="btnCamDisarmAll" class="ui-btn ui-corner-all ui-shadow ui-mini ui-btn-inline ui-icon-action ui-btn-icon-left">Disarm All</a>
+            </div>
+	    </fieldset>
+        <fieldset class="ui-grid-b">
+			<div class="ui-block-a">
+		        <a href="/api/foscam/snapPicture" id="btnCamSnapAll" class="ui-btn ui-corner-all ui-shadow ui-mini ui-btn-inline ui-icon-camera ui-btn-icon-left" download target="_blank">Snap All</a>
+            </div>
+	    </fieldset>
+        <fieldset class="ui-grid-b">
+			<div class="ui-block-a">
+		        <a href="#" id="btnCamRecordAll" class="ui-btn ui-corner-all ui-shadow ui-mini ui-btn-inline ui-icon-video ui-btn-icon-left">Record All</a>
+            </div>
+	    </fieldset>
+	    <fieldset class="ui-grid-solo">
+        	<div class="ui-block-a">
+        		<ol id="lsCams" data-role="listview" data-inset="true"/>
+        	</div>
+	    </fieldset>
+    </div><!-- /panel -->
+
 </div>
   
   <script src="js/jquery-1.11.1.min.js"></script>

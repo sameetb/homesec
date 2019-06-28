@@ -6,10 +6,16 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
+import javax.json.Json;
+import javax.json.JsonArray;
+import javax.json.JsonArrayBuilder;
+import javax.json.JsonObject;
+import javax.json.JsonValue;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
@@ -22,7 +28,6 @@ import javax.ws.rs.core.StreamingOutput;
 
 import org.eclipse.jetty.util.MultiPartOutputStream;
 import org.sb.homesec.Foscam;
-import org.sb.libevl.JsonHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,7 +48,7 @@ public class FoscamApi
 	@Produces(MediaType.APPLICATION_JSON)
 	public Response names()
 	{
-		return Response.ok(JsonHelper.array(cams.keySet())).build();
+		return Response.ok(cams.keySet().stream().collect(Collectors.collectingAndThen(jsonStringArray(), JsonArray::toString))).build();
 	}
 	
 	@Path("/{name}/snapPicture")
@@ -253,5 +258,128 @@ public class FoscamApi
 	    .header("Content-Disposition", "attachment;filename=\"foscam-" + System.currentTimeMillis()+  ".zip\"")
 		.build();
 	}
+
+	@Path("/status")
+	@GET
+	@Produces(MediaType.APPLICATION_JSON)
+	public Response statusAll()
+	{
+		return Response.ok(cams.values().stream()
+										.map(cam -> camStatus(cam))
+										.collect(Collectors.collectingAndThen(jsonArray(), JsonArray::toString))).build();
+	}
+
+	private static JsonObject camStatus(Foscam cam) 
+	{
+		try
+		{
+			return cam.getStatus();
+		}
+		catch(IOException io)
+		{
+			log.error("Failed to retrieve status of " + cam.getName(), io);
+			return Json.createObjectBuilder().add("name", cam.getName()).add("error", io.getMessage()).build();
+		}
+	}
 	
+	@Path("/{name}/status")
+	@GET
+	@Produces(MediaType.APPLICATION_JSON)
+	public Response status(@PathParam("name") String name)
+	{
+		return Optional.ofNullable(cams.get(name)).map(cam -> camStatus(cam)).map(jsn -> Response.ok(jsn.toString()))
+						.orElse(Response.status(Response.Status.NOT_FOUND))
+						.build();
+	}
+	
+	private Collector<JsonValue, JsonArrayBuilder, JsonArray> jsonArray()
+	{
+		return Collector.of(Json::createArrayBuilder, JsonArrayBuilder::add, (l, r) -> l.add(r), JsonArrayBuilder::build);
+	}
+
+	private Collector<String, JsonArrayBuilder, JsonArray> jsonStringArray()
+	{
+		return Collector.of(Json::createArrayBuilder, JsonArrayBuilder::add, (l, r) -> l.add(r), JsonArrayBuilder::build);
+	}
+	
+	@Path("/{name}/record{duration:(/[0-9]+)?}")
+	@POST
+	public Response record(@PathParam("name")String name, @PathParam("duration")String durationSecs) throws Exception
+	{
+		Foscam cam = cams.get(name);
+		if(cam != null)
+		{
+			cam.record(Optional.ofNullable(durationSecs).map(Integer::parseInt).orElse(60));
+			return Response.ok().build();
+		}
+		return Response.status(Response.Status.NOT_FOUND).build();
+	}
+	
+	@Path("/record{duration:(/[0-9]+)?}")
+	@POST
+	public Response recordall(@PathParam("duration")String durationSecs) throws Exception
+	{
+		int duration = Optional.ofNullable(durationSecs).map(Integer::parseInt).orElse(60);
+		ArrayList<Exception> exs = null; 
+		for(Foscam cam : cams.values())
+			try 
+			{
+				cam.record(duration);
+			} 
+			catch (Exception e) 
+			{
+				log.error("Failed to record " + cam.getName(), e);
+				if(exs == null) exs = new ArrayList<>();
+				exs.add(e);
+			}
+		
+		if(exs == null)
+			return Response.ok().build();
+		
+		throw throwEx(exs);
+	}
+
+	@Path("/{name}/armcfg")
+	@GET
+	@Produces(MediaType.APPLICATION_JSON)
+	public Response armcfg(@PathParam("name") String name) throws IOException
+	{
+		Foscam cam = cams.get(name);
+		if(cam != null)
+			return Response.ok(cam.getMotionDetectConfig().toString()).build();
+		return Response.status(Response.Status.NOT_FOUND).build();
+	}
+	
+	@Path("/{name}/stream{duration:(/[0-9]+)?}")
+	@GET
+	@Produces("video/mp4")
+	public Response stream(@PathParam("name")String name, @PathParam("duration")String durationSecs) throws Exception
+	{
+		return Optional.ofNullable(cams.get(name))
+				.map(cam -> Response.ok(new StreamingOutput() 
+										{
+											@Override
+											public void write(OutputStream os) throws IOException, WebApplicationException 
+											{
+												cam.stream(Optional.ofNullable(durationSecs).map(Integer::parseInt).orElse(30), 
+														(ba, size) -> 
+														{
+															try 
+															{
+																os.write(ba, 0, size);
+															} 
+															catch (IOException io) 
+															{
+																throw new RuntimeException(io);
+															}
+														});
+												os.flush();
+											}
+										})
+						             .header("Content-Disposition", 
+												"attachment;filename=\"" + name + "-" + System.currentTimeMillis()+  ".mp4\""))
+
+				 .orElse(Response.status(Response.Status.NOT_FOUND))
+				 .build();
+	}
 }

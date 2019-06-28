@@ -1,10 +1,10 @@
 package org.sb.homesec;
 
-import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.Random;
 import java.util.stream.Collectors;
+
 import org.sb.libevl.Notification;
 
 /**
