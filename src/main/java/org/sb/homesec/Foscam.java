@@ -543,16 +543,23 @@ public class Foscam
 		exec.get().execute(() -> {
 			if(orstp.isAlive())
 			{
-				log.info("Video client for " + getName() + " started");
+			    final long window = Math.max(Math.round(durationSecs*2), 60)*1000;
+				log.info("Video client for " + getName() + " started, will wait not more than " + window + "ms");
 				try(BufferedReader es = new BufferedReader(new InputStreamReader(orstp.getErrorStream())))
 				{
-					long life = System.currentTimeMillis() + Math.max(Math.round(durationSecs*2), 60)*1000;
-					String line;
-					while((line = es.readLine()) != null) 
+			        final long life = System.currentTimeMillis() + window;
+					while(life >= System.currentTimeMillis()) 
 					{
+					   String line;
+					   while((line = es.readLine()) != null)
 						log.info(line);
-						if(life >= System.currentTimeMillis())
-							break;
+
+					   if(!orstp.isAlive()){
+						 log.info("Video client has exited");
+						 break;
+                       }
+
+					   Thread.sleep(1000L);
 					}
 				}
 				catch(Exception ex)
